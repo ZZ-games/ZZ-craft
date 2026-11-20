@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ZZ Craft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;font-family:Roboto,system-ui,sans-serif;background:#fff;color:#040404;user-select:none;-webkit-user-select:none;touch-action:none}
+#app{position:fixed;inset:0;display:flex}
+#stage{position:relative;flex:1;min-width:0;height:100%;overflow:hidden;
+  background-color:#fff;
+  background-image:radial-gradient(#e8e8e8 1px,transparent 1px);background-size:28px 28px}
+#sidebar{width:320px;flex:none;height:100%;border-left:1px solid #c8c8c8;background:#fff;display:flex;flex-direction:column;position:relative;z-index:5}
+#sidebar.drop{background:#fff3f3}
+#list{flex:1;overflow-y:auto;padding:14px 12px 10px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;touch-action:pan-y}
+#bar{border-top:1px solid #c8c8c8;padding:8px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#bar .tabs{display:flex;gap:4px;width:100%}
+.tab{flex:1;border:1px solid #c8c8c8;background:#fff;border-radius:6px;padding:6px 4px;font:500 12px Roboto;cursor:pointer;color:#555}
+.tab.on{background:#040404;color:#fff;border-color:#040404}
+#search{width:100%;border:1px solid #c8c8c8;border-radius:6px;padding:9px 10px;font:400 14px Roboto;outline:none;user-select:text;-webkit-user-select:text}
+#search:focus{border-color:#040404}
+.item{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border:1px solid #c8c8c8;border-radius:8px;background:#fff;font-size:16px;line-height:1.15;cursor:grab;white-space:nowrap;position:relative;touch-action:none}
+.item:hover{border-color:#6a6a6a;background:#fafafa}
+.item .em{font-size:17px}
+.item.new{background:#f2fbea;border-color:#5aa02c}
+.item.new::after,.item.first::after{content:attr(data-badge);position:absolute;top:-9px;right:6px;background:#5aa02c;color:#fff;font:700 9px Roboto;padding:1px 5px;border-radius:8px;letter-spacing:.2px;pointer-events:none}
+.item.first{background:#fff7e0;border-color:#e0a21d}
+.item.first::after{background:#e0a21d}
+#stage .item{position:absolute;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#stage .item.drag{z-index:50;cursor:grabbing;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+#stage .item.hot{border-color:#2f7bff;background:#eaf2ff}
+#stage .item.pop{animation:pop .28s ease-out}
+#stage .item.busy{opacity:.65}
+@keyframes pop{0%{transform:scale(.6);opacity:.2}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.spin{width:14px;height:14px;border:2px solid #ccc;border-top-color:#333;border-radius:50%;animation:sp .7s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+#logo{position:absolute;left:18px;bottom:14px;font:700 26px Roboto;letter-spacing:-.5px;color:#040404;opacity:.9;pointer-events:none}
+#logo small{display:block;font:400 11px Roboto;color:#888;letter-spacing:.3px;margin-top:-2px}
+#tools{position:absolute;left:18px;top:14px;display:flex;gap:8px;z-index:6}
+.btn{border:1px solid #c8c8c8;background:#fff;border-radius:8px;padding:7px 12px;font:500 13px Roboto;cursor:pointer;color:#333}
+.btn:hover{background:#f4f4f4}
+#count{position:absolute;right:16px;top:14px;font:500 13px Roboto;color:#777;z-index:6;background:#ffffffcc;padding:2px 6px;border-radius:6px}
+#toast{position:absolute;left:50%;top:18px;transform:translateX(-50%) translateY(-20px);background:#040404;color:#fff;padding:9px 16px;border-radius:20px;font:500 14px Roboto;opacity:0;transition:.25s;pointer-events:none;z-index:99;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#modal{position:fixed;inset:0;background:#0006;display:none;align-items:center;justify-content:center;z-index:100;touch-action:auto}
+#modal.show{display:flex}
+#modal .box{background:#fff;border-radius:12px;padding:20px;width:min(92vw,400px);box-shadow:0 10px 40px #0005;user-select:text;-webkit-user-select:text}
+#modal h3{margin:0 0 8px;font:700 18px Roboto}
+#modal p{margin:6px 0 12px;font-size:13px;color:#555;line-height:1.4}
+#modal label{display:block;font:500 12px Roboto;margin:8px 0 3px}
+#modal select,#modal input{width:100%;padding:8px;border:1px solid #c8c8c8;border-radius:6px;font:400 14px Roboto}
+#modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.btn.pri{background:#040404;color:#fff;border-color:#040404}
+.btn.red{background:#d33;color:#fff;border-color:#d33}
+@media(max-width:700px){
+  #app{flex-direction:column}
+  #sidebar{width:100%;height:36%;border-left:0;border-top:1px solid #c8c8c8;order:2}
+  #stage{order:1}
+  #logo{font-size:20px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <div id="tools">
+      <button class="btn" id="bClear">🧹 Clear</button>
+      <button class="btn" id="bReset">↺ Reset</button>
+      <button class="btn" id="bSound">🔊</button>
+      <button class="btn" id="bSet">⚙️ AI</button>
+    </div>
+    <div id="count"></div>
+    <div id="logo">ZZ Craft<small>an infinite crafting game</small></div>
+    <div id="toast"></div>
+  </div>
+  <div id="sidebar">
+    <div id="list"></div>
+    <div id="bar">
+      <div class="tabs">
+        <button class="tab on" id="tTime">Sort by time</button>
+        <button class="tab" id="tName">Sort by name</button>
+        <button class="tab" id="tDisc">✨ Discoveries</button>
+      </div>
+      <input id="search" placeholder="Search items…" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+</div>
+<div id="modal"><div class="box" id="mbox"></div></div>
+
+<script>
+(()=>{
+"use strict";
+/* ---------- storage helpers ---------- */
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+/* ---------- base elements ---------- */
+const BASE=[["Water","💧"],["Fire","🔥"],["Wind","🌬️"],["Earth","🌍"]];
+
+/* ---------- recipe book: "A+B=emoji Result" ---------- */
+const RAW=`
+Water+Fire=💨 Steam
+Water+Earth=🌱 Plant
+Water+Wind=☁️ Cloud
+Water+Water=🌊 Lake
+Fire+Earth=🌋 Lava
+Fire+Wind=💨 Smoke
+Fire+Fire=🌋 Volcano
+Earth+Wind=🌫️ Dust
+Earth+Earth=⛰️ Mountain
+Wind+Wind=🌪️ Tornado
+Lake+Water=🌊 Ocean
+Lake+Lake=🌊 Ocean
+Steam+Steam=☁️ Cloud
+Steam+Earth=🌋 Geyser
+Steam+Water=♨️ Hot Spring
+Cloud+Water=🌧️ Rain
+Cloud+Fire=⚡ Lightning
+Cloud+Cloud=⛈️ Storm
+Cloud+Wind=🌤️ Sky
+Cloud+Mountain=❄️ Snow
+Rain+Fire=🌈 Rainbow
+Rain+Sun=🌈 Rainbow
+Rain+Earth=🌱 Plant
+Rain+Plant=🌸 Flower
+Smoke+Smoke=🌫️ Smog
+Smoke+Cloud=🌫️ Smog
+Lava+Water=🪨 Obsidian
+Lava+Earth=🪨 Stone
+Lava+Lava=🌋 Volcano
+Lava+Mountain=🌋 Volcano
+Volcano+Ocean=🏝️ Island
+Volcano+Water=🏝️ Island
+Dust+Water=🟤 Mud
+Dust+Dust=🌪️ Sandstorm
+Mud+Fire=🧱 Brick
+Mud+Plant=🥔 Potato
+Potato+Fire=🍟 Fries
+Mountain+Mountain=🏔️ Mountain Range
+Mountain+Water=🏞️ River
+Mountain+Rain=🏞️ River
+Mountain+Stone=🏔️ Cliff
+Ocean+Wind=🌊 Wave
+Ocean+Earth=🏝️ Island
+Ocean+Plant=🧽 Sponge
+Ocean+Storm=🌀 Hurricane
+Ocean+Human=🏴‍☠️ Pirate
+Ocean+Boat=🚢 Ship
+Wave+Wave=🌊 Tsunami
+Wave+Earth=🏖️ Beach
+Sand+Water=🏖️ Beach
+Stone+Wind=🏜️ Sand
+Sand+Fire=🪟 Glass
+Sand+Glass=⏳ Hourglass
+Sand+Sand=🏜️ Desert
+Desert+Plant=🌵 Cactus
+Island+Plant=🌴 Palm Tree
+Island+Island=🗺️ Archipelago
+Plant+Earth=🌳 Tree
+Plant+Plant=🌾 Wheat
+Plant+Wind=🍃 Leaf
+Plant+Fire=🌫️ Ash
+Plant+Water=🌿 Swamp
+Plant+Steam=☕ Coffee
+Plant+House=🏡 Garden
+Plant+Life=🐾 Animal
+Plant+Tree=🪵 Wood
+Tree+Tree=🌲 Forest
+Tree+Water=🍎 Apple
+Tree+Stone=🌳 Oak
+Tree+Fire=🪵 Charcoal
+Wood+Fire=🏕️ Campfire
+Wood+Wood=🏠 House
+Wood+Water=⛵ Boat
+Wood+Metal=🪓 Axe
+Wood+Stone=🛞 Wheel
+Wood+Wind=🪈 Flute
+Wood+Wire=🎸 Guitar
+Wood+Ocean=⛵ Boat
+House+House=🏘️ Village
+House+Ghost=🏚️ Haunted House
+House+Stone=🏰 Castle
+Stone+House=🏰 Castle
+Village+Village=🏙️ City
+City+Earth=🗺️ Country
+City+City=🌆 Metropolis
+Castle+Human=👑 King
+King+Castle=🏰 Kingdom
+Kingdom+Wind=🛸 Airship
+Stone+Stone=🧱 Wall
+Stone+Lava=⚙️ Metal
+Stone+Earth=🛣️ Road
+Stone+Lightning=💎 Diamond
+Stone+Star=☄️ Meteor
+Planet+Stone=🌙 Moon
+Metal+Fire=⚔️ Sword
+Metal+Stone=🔧 Tool
+Metal+Water=🟫 Rust
+Metal+Metal=➰ Wire
+Metal+Lightning=🔋 Battery
+Metal+Steam=🚂 Steam Engine
+Metal+Sky=🚀 Rocket
+Metal+Bird=✈️ Plane
+Metal+Wheel=🚗 Car
+Metal+Human=🤖 Robot
+Car+Car=🚦 Traffic
+Car+Steam=🚂 Train
+Tool+Wood=🔨 Hammer
+Wire+Lightning=💡 Electricity
+Electricity+Metal=🤖 Robot
+Electricity+Glass=💻 Computer
+Computer+Computer=🌐 Internet
+Computer+Human=🎮 Gamer
+Internet+Human=😂 Meme
+Internet+Cloud=☁️ Cloud Computing
+Robot+Internet=🧠 AI
+Human+Coffee=🧑‍💻 Programmer
+Coffee+Milk=🥛 Latte
+Leaf+Steam=🍵 Tea
+Leaf+Sponge=🧽 Absorb
+Cloud+Oak=🌰 Acorn
+Hair+Tornado=🦱 Afro
+Lightning+Swamp=🧬 Life
+Life+Earth=🧍 Human
+Life+Water=🐟 Fish
+Life+Wind=🐦 Bird
+Life+Life=🧬 Evolution
+Human+Human=👨‍👩‍👧 Family
+Human+Fire=🧑‍🍳 Cook
+Human+Plant=🧑‍🌾 Farmer
+Human+Water=🏊 Swimmer
+Human+Smoke=👻 Ghost
+Human+Moon=🐺 Werewolf
+Human+Swamp=🧟 Zombie
+Human+Animal=🐕 Dog
+Human+Sword=🤺 Knight
+Human+Wind=💇 Hair
+Human+Star=🧙 Wizard
+Human+Rocket=🧑‍🚀 Astronaut
+Human+Ship=🏴‍☠️ Pirate
+Human+Flute=🎶 Musician
+Human+Guitar=🎤 Rock Star
+Human+Snow=⛄ Snowman
+Human+Tool=🧑‍🔧 Mechanic
+Hourglass+Metal=🕰️ Clock
+Hourglass+Hourglass=⏳ Time
+Fish+Fire=🍣 Cooked Fish
+Animal+Water=🐸 Frog
+Animal+Swamp=🐸 Frog
+Animal+Fire=🐉 Dragon
+Animal+Wind=🐦 Bird
+Animal+Earth=🐄 Cow
+Animal+Milk=🐈 Cat
+Animal+Forest=🐻 Bear
+Animal+Ocean=🐙 Octopus
+Animal+Ice=🐧 Penguin
+Animal+Flower=🐝 Bee
+Animal+Rainbow=🦄 Unicorn
+Animal+Magic=🦄 Unicorn
+Dog+Mountain=🐺 Wolf
+Dog+Forest=🐺 Wolf
+Dog+Dog=🐕‍🦺 Pack
+Bear+Ice=🐻‍❄️ Polar Bear
+Dragon+Knight=🦸 Hero
+Bird+Bird=🕊️ Flock
+Bird+Earth=🥚 Egg
+Egg+Egg=🐔 Chicken
+Egg+Fire=🍳 Fried Egg
+Egg+Lava=🦖 Dinosaur
+Chicken+Fire=🍗 Fried Chicken
+Cow+Water=🥛 Milk
+Cow+Bread=🍔 Burger
+Milk+Stone=🧀 Cheese
+Milk+Ice=🍦 Ice Cream
+Milk+Milk=🧈 Butter
+Bee+Flower=🍯 Honey
+Flower+Wind=🦋 Butterfly
+Wheat+Water=🥣 Dough
+Dough+Fire=🍞 Bread
+Dough+Cheese=🍕 Pizza
+Bread+Bread=🥪 Sandwich
+Apple+Fire=🥧 Pie
+Apple+Apple=🍎 Orchard
+Snow+Snow=⛄ Snowman
+Snow+Wind=🌨️ Blizzard
+Water+Snow=🧊 Ice
+Ice+Ice=🧊 Glacier
+Fire+Ice=💧 Water
+Water+Ice=🧊 Ice
+Fire+Sky=☀️ Sun
+Sky+Earth=🪐 Planet
+Sky+Lightning=⭐ Star
+Sun+Sky=🌅 Day
+Sun+Moon=🌑 Eclipse
+Sun+Sun=🌞 Supernova
+Star+Star=🌌 Galaxy
+Star+Dust=🕳️ Black Hole
+Star+Rainbow=✨ Magic
+Star+Planet=🌠 Shooting Star
+Planet+Planet=🪐 Solar System
+Planet+Life=👽 Alien
+Alien+Metal=🛸 UFO
+Magic+Human=🧙 Wizard
+Magic+Water=🧪 Potion
+Wizard+Dragon=🧙‍♂️ Dragon Rider
+Rocket+Moon=🌕 Moon Landing
+Wave+Rainbow=🌈 Rainbow
+Bird+Fire=🦅 Phoenix
+Phoenix+Water=🐦 Bird
+Tornado+Water=🌊 Waterspout
+Tornado+Fire=🔥 Firestorm
+Wind+Dust=🌫️ Sandstorm
+Fire+Water=💨 Steam
+Smoke+Fire=🔥 Firestorm
+Obsidian+Fire=🔪 Knife
+Brick+Brick=🧱 Wall
+Brick+Wood=🏠 House
+Ash+Water=🧼 Soap
+Soap+Water=🫧 Bubble
+Bubble+Wind=🫧 Bubbles
+Glass+Glass=🪟 Window
+Glass+Water=🥛 Water Glass
+Glass+Sky=🔭 Telescope
+Telescope+Star=🔭 Astronomer
+Clock+Human=⏰ Alarm
+Time+Human=👴 Old Man
+Time+Plant=🌳 Tree
+Rust+Time=🏚️ Ruin
+King+King=⚔️ War
+War+Human=🪖 Soldier
+Soldier+Sky=🪂 Paratrooper
+Sword+Stone=⚒️ Blacksmith
+Blacksmith+Metal=🛡️ Shield
+Shield+Sword=⚔️ Knight
+Knight+Horse=🏇 Jockey
+Animal+Wheat=🐴 Horse
+Horse+Human=🏇 Rider
+Horse+Horn=🦄 Unicorn
+Wolf+Moon=🌕 Howl
+Zombie+Zombie=🧟‍♂️ Zombie Horde
+Ghost+Ghost=👻 Haunting
+Meteor+Earth=💥 Impact
+Meteor+Dinosaur=💥 Extinction
+Egg+Dragon=🥚 Dragon Egg
+Dragon+Dragon=🐲 Elder Dragon
+Fish+Water=🐠 Aquarium
+Fish+Fish=🐟 School
+Fish+Ocean=🦈 Shark
+Shark+Human=🏊‍♂️ Jaws
+Octopus+Ocean=🦑 Squid
+Frog+Frog=🐸 Tadpole
+Frog+Magic=👑 Frog Prince
+Guitar+Fire=🎸 Rock Star
+Music+Human=🎤 Singer
+Flute+Flute=🎶 Music
+Music+Music=🎼 Symphony
+`;
+
+/* ---------- build recipe + emoji tables ---------- */
+const EMOJI={};      // lower name -> emoji
+const NAME={};       // lower name -> display name
+const RECIPES={};    // "a|b" sorted -> [name, emoji]
+const keyOf=(a,b)=>{a=a.toLowerCase();b=b.toLowerCase();return a<b?a+"|"+b:b+"|"+a};
+for(const [n,e] of BASE){EMOJI[n.toLowerCase()]=e;NAME[n.toLowerCase()]=n}
+for(const line of RAW.split("\n")){
+  const t=line.trim(); if(!t||!t.includes("=")) continue;
+  const [lhs,rhs]=t.split("=");
+  const [a,b]=lhs.split("+").map(s=>s.trim());
+  const sp=rhs.trim().indexOf(" ");
+  const em=rhs.trim().slice(0,sp), nm=rhs.trim().slice(sp+1).trim();
+  RECIPES[keyOf(a,b)]=[nm,em];
+  EMOJI[nm.toLowerCase()]=em; NAME[nm.toLowerCase()]=nm;
+}
+
+/* ---------- procedural fallback (deterministic) ---------- */
+const POOL=[["Energy","⚡"],["Dream","💭"],["Shadow","🌑"],["Machine","⚙️"],["Garden","🌷"],["Story","📖"],["Storm Cloud","⛈️"],["Treasure","💰"],["Mirror","🪞"],["Echo","📣"],["Crystal","🔮"],["Memory","🧠"],["Journey","🧭"],["Festival","🎉"],["Legend","📜"],["Harvest","🌾"],["Whisper","🤫"],["Spark","✨"],["Bridge","🌉"],["Lantern","🏮"],["Puzzle","🧩"],["Wonder","🌟"],["Mystery","🕵️"],["Engine","🛠️"],["Compass","🧭"],["Feather","🪶"],["Ocean Breeze","🌬️"],["Thunder","🌩️"],["Fossil","🦴"],["Cave","🕳️"],["Pyramid","🔺"],["Voyage","⛵"],["Harmony","🎶"],["Ruins","🏚️"],["Canyon","🏜️"],["Sunrise","🌅"],["Fog","🌫️"],["Magnet","🧲"],["Blueprint","📐"],["Kite","🪁"]];
+function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function proc(a,b){
+  const k=keyOf(a,b), h=fnv(k), A=a, B=b;
+  if(a.toLowerCase()===b.toLowerCase()){
+    const pre=["Giant","Double","Mega","Tiny","Super"][h%5];
+    return [pre+" "+A,EMOJI[A.toLowerCase()]||"❓"];
+  }
+  const mode=h%5;
+  const ea=EMOJI[A.toLowerCase()]||"❓", eb=EMOJI[B.toLowerCase()]||"❓";
+  const w=(x,y)=>x+" "+y;
+  if(mode===0){return [w(A,B),ea]}
+  if(mode===1){return [w(B,A),eb]}
+  if(mode===2){
+    const x=A.split(" ")[0], y=B.split(" ").slice(-1)[0];
+    const half=s=>s.slice(0,Math.ceil(s.length/2)), rest=s=>s.slice(Math.floor(s.length/2));
+    if(x.length>3&&y.length>3){let r=half(x)+rest(y).toLowerCase();r=r[0].toUpperCase()+r.slice(1);return [r,ea]}
+    return [w(A,B),eb];
+  }
+  const p=POOL[(h>>3)%POOL.length];return [p[0],p[1]];
+}
+
+/* ---------- optional AI (works when this file is opened outside a sandbox) ---------- */
+const settings=store.get("zz_settings",{provider:"none",key:""});
+const cache=store.get("zz_cache",{});
+async function askAI(a,b){
+  if(settings.provider==="none"||!settings.key) return null;
+  const prompt=`You are the engine of the game Infinite Craft. Combine "${a}" and "${b}" into a single new concept (1-3 words, a real thing, word or well-known name). Reply ONLY with JSON: {"emoji":"<one emoji>","name":"<result>"}`;
+  try{
+    let txt;
+    if(settings.provider==="groq"){
+      const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.key},body:JSON.stringify({model:"llama-3.1-8b-instant",temperature:.4,messages:[{role:"user",content:prompt}]})});
+      const j=await r.json();txt=j.choices[0].message.content;
+    }else{
+      const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+encodeURIComponent(settings.key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+      const j=await r.json();txt=j.candidates[0].content.parts[0].text;
+    }
+    const m=txt.match(/\{[\s\S]*\}/);const o=JSON.parse(m[0]);
+    if(o&&o.name&&o.emoji) return [String(o.name).trim().slice(0,40),String(o.emoji).trim()];
+  }catch(e){}
+  return null;
+}
+async function combine(a,b){
+  const k=keyOf(a,b);
+  if(RECIPES[k]) return RECIPES[k];
+  if(cache[k]) return cache[k];
+  let r=await askAI(a,b);
+  if(!r) r=proc(a,b);
+  cache[k]=r;store.set("zz_cache",cache);
+  return r;
+}
+
+/* ---------- state ---------- */
+const $=s=>document.querySelector(s);
+const stage=$("#stage"),sidebar=$("#sidebar"),list=$("#list"),search=$("#search");
+let discovered=store.get("zz_found",null)||BASE.map(([n,e],i)=>({name:n,emoji:e,t:i,first:false,isNew:false}));
+let canvasItems=[];          // {id,name,emoji,x,y,el}
+let sortMode="time", filter="";
+let soundOn=store.get("zz_sound",true);
+let nextId=1;
+
+const saveFound=()=>store.set("zz_found",discovered);
+const saveCanvas=()=>store.set("zz_canvas",canvasItems.map(c=>({name:c.name,emoji:c.emoji,x:c.x,y:c.y})));
+
+/* ---------- audio ---------- */
+let ac=null;
+function blip(f1,f2,dur=.12){
+  if(!soundOn) return;
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type="sine";o.frequency.setValueAtTime(f1,ac.currentTime);o.frequency.exponentialRampToValueAtTime(f2,ac.currentTime+dur);
+    g.gain.setValueAtTime(.08,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+dur+.05);
+    o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+dur+.06);
+  }catch(e){}
+}
+const sndMerge=()=>blip(440,660);
+const sndNew=()=>{blip(520,780,.12);setTimeout(()=>blip(780,1040,.18),110)};
+
+/* ---------- toast ---------- */
+let tt;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),1800)}
+
+/* ---------- sidebar rendering ---------- */
+function mkItem(name,emoji){
+  const d=document.createElement("div");d.className="item";
+  d.innerHTML=`<span class="em"></span><span class="nm"></span>`;
+  d.querySelector(".em").textContent=emoji;d.querySelector(".nm").textContent=name;
+  d.dataset.name=name;d.dataset.emoji=emoji;
+  return d;
+}
+function renderList(){
+  let arr=discovered.slice();
+  if(filter) arr=arr.filter(d=>d.name.toLowerCase().includes(filter));
+  if(sortMode==="name") arr.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(sortMode==="disc") arr=arr.filter(d=>d.first).sort((a,b)=>b.t-a.t);
+  else arr.sort((a,b)=>a.t-b.t);
+  list.innerHTML="";
+  for(const d of arr){
+    const el=mkItem(d.name,d.emoji);
+    if(d.first){el.classList.add("first");el.dataset.badge="First Discovery"}
+    else if(d.isNew){el.classList.add("new");el.dataset.badge="New"}
+    el.addEventListener("pointerdown",ev=>startFromSidebar(ev,d));
+    list.appendChild(el);
+  }
+  $("#count").textContent=discovered.length+" items · "+discovered.filter(d=>d.first).length+" discoveries";
+}
+
+/* ---------- canvas items ---------- */
+function addCanvasItem(name,emoji,x,y,opts={}){
+  const el=mkItem(name,emoji);
+  const c={id:nextId++,name,emoji,x,y,el};
+  el.style.left=x+"px";el.style.top=y+"px";
+  if(opts.pop) el.classList.add("pop");
+  el.addEventListener("pointerdown",ev=>startDrag(ev,c));
+  el.addEventListener("dblclick",()=>{const r=el.getBoundingClientRect(),s=stage.getBoundingClientRect();addCanvasItem(c.name,c.emoji,c.x+22,c.y+22,{pop:true});saveCanvas()});
+  stage.appendChild(el);canvasItems.push(c);
+  return c;
+}
+function removeCanvasItem(c){c.el.remove();canvasItems=canvasItems.filter(x=>x!==c)}
+function clampPos(c){
+  const w=c.el.offsetWidth,h=c.el.offsetHeight,sw=stage.clientWidth,sh=stage.clientHeight;
+  c.x=Math.max(4,Math.min(sw-w-4,c.x));c.y=Math.max(4,Math.min(sh-h-4,c.y));
+}
+
+/* ---------- dragging ---------- */
+let drag=null;
+function startDrag(ev,c){
+  if(ev.button!==undefined&&ev.button!==0) return;
+  ev.preventDefault();
+  const r=c.el.getBoundingClientRect();
+  drag={c,ox:ev.clientX-r.left,oy:ev.clientY-r.top,pid:ev.pointerId,moved:false};
+  c.el.classList.add("drag");
+  c.el.parentNode.appendChild(c.el); // bring to front
+  try{c.el.setPointerCapture(ev.pointerId)}catch(e){}
+  blip(300,380,.05);
+}
+function startFromSidebar(ev,d){
+  if(ev.button!==undefined&&ev.button!==0) return;
+  ev.preventDefault();
+  const s=stage.getBoundingClientRect();
+  const c=addCanvasItem(d.name,d.emoji,ev.clientX-s.left-30,ev.clientY-s.top-18);
+  c.el.style.visibility="hidden";
+  requestAnimationFrame(()=>{c.el.style.visibility="";});
+  const r=c.el.getBoundingClientRect();
+  drag={c,ox:r.width/2,oy:r.height/2,pid:ev.pointerId,moved:true,fromSide:true};
+  c.el.classList.add("drag");
+  try{c.el.setPointerCapture(ev.pointerId)}catch(e){}
+  // position under pointer
+  c.x=ev.clientX-s.left-r.width/2;c.y=ev.clientY-s.top-r.height/2;
+  c.el.style.left=c.x+"px";c.el.style.top=c.y+"px";
+  // capture needs the element: re-route events via window
+}
+window.addEventListener("pointermove",ev=>{
+  if(!drag) return;
+  const s=stage.getBoundingClientRect(),c=drag.c;
+  drag.moved=true;
+  c.x=ev.clientX-s.left-drag.ox;c.y=ev.clientY-s.top-drag.oy;
+  c.el.style.left=c.x+"px";c.el.style.top=c.y+"px";
+  const overSide=pointInRect(ev.clientX,ev.clientY,sidebar.getBoundingClientRect());
+  sidebar.classList.toggle("drop",overSide);
+  // highlight hit target
+  const hit=findHit(c);
+  for(const o of canvasItems) o.el.classList.toggle("hot",o===hit);
+});
+window.addEventListener("pointerup",async ev=>{
+  if(!drag) return;
+  const {c}=drag;drag=null;
+  c.el.classList.remove("drag");sidebar.classList.remove("drop");
+  for(const o of canvasItems) o.el.classList.remove("hot");
+  const overSide=pointInRect(ev.clientX,ev.clientY,sidebar.getBoundingClientRect());
+  if(overSide){removeCanvasItem(c);saveCanvas();return}
+  const hit=findHit(c);
+  if(hit){await mergeItems(c,hit)}
+  else{clampPos(c);c.el.style.left=c.x+"px";c.el.style.top=c.y+"px";saveCanvas()}
+});
+window.addEventListener("pointercancel",()=>{if(drag){drag.c.el.classList.remove("drag");drag=null}});
+const pointInRect=(x,y,r)=>x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+function overlapArea(a,b){
+  const x=Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left));
+  const y=Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+  return x*y;
+}
+function findHit(c){
+  const ra=c.el.getBoundingClientRect();let best=null,bv=0;
+  for(const o of canvasItems){
+    if(o===c||o.busy) continue;
+    const v=overlapArea(ra,o.el.getBoundingClientRect());
+    const min=Math.min(ra.width*ra.height,o.el.offsetWidth*o.el.offsetHeight);
+    if(v>min*.18&&v>bv){bv=v;best=o}
+  }
+  return best;
+}
+
+/* ---------- merge ---------- */
+async function mergeItems(a,b){
+  const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+  a.busy=b.busy=true;
+  a.el.classList.add("busy");b.el.classList.add("busy");
+  const an=a.name,bn=b.name;
+  const spin=document.createElement("div");
+  spin.className="item";spin.style.cssText=`position:absolute;left:${mx}px;top:${my}px;z-index:40`;
+  spin.innerHTML=`<span class="spin"></span>`;stage.appendChild(spin);
+  const minWait=new Promise(r=>setTimeout(r,260));
+  const [res]=await Promise.all([combine(an,bn),minWait]);
+  spin.remove();
+  removeCanvasItem(a);removeCanvasItem(b);
+  const [name,emoji]=res;
+  const c=addCanvasItem(name,emoji,mx,my,{pop:true});
+  requestAnimationFrame(()=>{clampPos(c);c.el.style.left=c.x+"px";c.el.style.top=c.y+"px";saveCanvas()});
+  const lower=name.toLowerCase();
+  const had=discovered.find(d=>d.name.toLowerCase()===lower);
+  if(!had){
+    // "first discovery" when the recipe wasn't in the known book (procedural / AI result)
+    const known=!!RECIPES[keyOf(an,bn)];
+    discovered.push({name,emoji,t:discovered.length+1000+Date.now()%100000,first:!known,isNew:true});
+    discovered.forEach((d,i)=>{if(d.name===name) d.t=nextT()});
+    saveFound();renderList();
+    if(!known){toast("✨ First Discovery: "+emoji+" "+name);sndNew()}
+    else{toast("New: "+emoji+" "+name);sndMerge()}
+    const last=list.lastElementChild;if(sortMode==="time"&&last) list.scrollTop=list.scrollHeight;
+  }else{sndMerge()}
+}
+let tCounter=Math.max(...discovered.map(d=>d.t),0);
+function nextT(){return ++tCounter}
+tCounter=Math.max(tCounter,discovered.length);
+
+/* ---------- UI buttons ---------- */
+function setSort(m){
+  sortMode=m;
+  for(const [id,mm] of [["#tTime","time"],["#tName","name"],["#tDisc","disc"]]) $(id).classList.toggle("on",mm===m);
+  renderList();
+}
+$("#tTime").onclick=()=>setSort("time");
+$("#tName").onclick=()=>setSort("name");
+$("#tDisc").onclick=()=>setSort("disc");
+search.addEventListener("input",()=>{filter=search.value.trim().toLowerCase();renderList()});
+// clear "new" flags once viewed a while
+list.addEventListener("pointerdown",()=>{});
+setInterval(()=>{let ch=false;for(const d of discovered){if(d.isNew){d.isNew=false;ch=true}}if(ch&&!drag){saveFound()}},20000);
+
+$("#bClear").onclick=()=>{for(const c of canvasItems.slice()) removeCanvasItem(c);saveCanvas();toast("Canvas cleared")};
+$("#bSound").onclick=()=>{soundOn=!soundOn;store.set("zz_sound",soundOn);$("#bSound").textContent=soundOn?"🔊":"🔇"};
+$("#bSound").textContent=soundOn?"🔊":"🔇";
+
+const modal=$("#modal"),mbox=$("#mbox");
+modal.addEventListener("pointerdown",e=>{if(e.target===modal) modal.classList.remove("show")});
+$("#bReset").onclick=()=>{
+  mbox.innerHTML=`<h3>Reset progress?</h3><p>This deletes every item you've discovered and clears the canvas. This can't be undone.</p><div class="row"><button class="btn" id="mNo">Cancel</button><button class="btn red" id="mYes">Reset</button></div>`;
+  modal.classList.add("show");
+  $("#mNo").onclick=()=>modal.classList.remove("show");
+  $("#mYes").onclick=()=>{
+    store.del("zz_found");store.del("zz_canvas");store.del("zz_cache");
+    for(const c of canvasItems.slice()) removeCanvasItem(c);
+    discovered=BASE.map(([n,e],i)=>({name:n,emoji:e,t:i,first:false,isNew:false}));
+    for(const k in cache) delete cache[k];
+    tCounter=discovered.length;renderList();modal.classList.remove("show");toast("Progress reset");
+  };
+};
+$("#bSet").onclick=()=>{
+  mbox.innerHTML=`<h3>Infinite mode (AI)</h3>
+  <p>ZZ Craft ships with a big built-in recipe book and a generator for everything else, so every combination always works. Add a free API key to let a real AI invent the results instead (like the original). This only works when the file is opened outside a sandbox (e.g. saved and run locally / hosted on your own site); keys stay in your browser.</p>
+  <label>Provider</label>
+  <select id="sProv"><option value="none">Built-in only</option><option value="groq">Groq (llama-3.1-8b-instant)</option><option value="gemini">Google Gemini (2.0 Flash)</option></select>
+  <label>API key</label><input id="sKey" type="password" placeholder="paste key" autocomplete="off">
+  <div class="row"><button class="btn" id="sCancel">Cancel</button><button class="btn pri" id="sSave">Save</button></div>`;
+  $("#sProv").value=settings.provider;$("#sKey").value=settings.key;
+  modal.classList.add("show");
+  $("#sCancel").onclick=()=>modal.classList.remove("show");
+  $("#sSave").onclick=()=>{settings.provider=$("#sProv").value;settings.key=$("#sKey").value.trim();store.set("zz_settings",settings);modal.classList.remove("show");toast(settings.provider==="none"?"Using built-in recipes":"AI mode on")};
+};
+
+/* ---------- init ---------- */
+// restore canvas
+const saved=store.get("zz_canvas",null);
+if(saved&&saved.length){for(const s of saved) addCanvasItem(s.name,s.emoji,s.x,s.y)}
+renderList();
+// ensure all discovered items have emoji in lookup for generator
+for(const d of discovered){EMOJI[d.name.toLowerCase()]=d.emoji;NAME[d.name.toLowerCase()]=d.name}
+window.addEventListener("resize",()=>{for(const c of canvasItems){clampPos(c);c.el.style.left=c.x+"px";c.el.style.top=c.y+"px"}});
+if(!saved||!saved.length){
+  const w=stage.clientWidth,h=stage.clientHeight;
+  // gentle hint
+  toast("Drag items onto the canvas and combine them!");
+}
+window.__zz={combine,proc,RECIPES,keyOf};
+})();
+</script>
+</body>
+</html>
