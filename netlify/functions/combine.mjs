@@ -63,6 +63,24 @@ async function askGroq(a, b) {
   throw lastErr;
 }
 
+// Best-effort abuse guard: only uncached (AI) lookups count. Cached recipes are free.
+const PER_IP_PER_MIN = Number(process.env.RATE_PER_MIN || 20);
+const GLOBAL_PER_DAY = Number(process.env.RATE_PER_DAY || 5000);
+async function overLimit(req) {
+  try {
+    const store = getStore("zz-rate");
+    const ip = (req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for") || "anon").split(",")[0].trim().replace(/[^a-zA-Z0-9.:]/g, "_");
+    const now = Date.now();
+    const kMin = `ip_${ip}_${Math.floor(now / 60000)}`;
+    const kDay = `day_${Math.floor(now / 86400000)}`;
+    const [m, d] = await Promise.all([store.get(kMin, { type: "json" }), store.get(kDay, { type: "json" })]);
+    const mc = (m && m.n) || 0, dc = (d && d.n) || 0;
+    if (mc >= PER_IP_PER_MIN || dc >= GLOBAL_PER_DAY) return true;
+    await Promise.all([store.setJSON(kMin, { n: mc + 1 }), store.setJSON(kDay, { n: dc + 1 })]);
+  } catch {}
+  return false;
+}
+
 export default async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
@@ -79,6 +97,8 @@ export default async (req) => {
     const hit = await recipes.get(key, { type: "json" });
     if (hit) return json({ ...hit, first: false });
   } catch {}
+
+  if (await overLimit(req)) return json({ error: "slow_down" }, 429);
 
   let res;
   try { res = await askGroq(a, b); }
