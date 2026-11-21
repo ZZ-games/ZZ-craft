@@ -72,7 +72,6 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:Roboto,system-ui,sans
       <button class="btn" id="bClear">🧹 Clear</button>
       <button class="btn" id="bReset">↺ Reset</button>
       <button class="btn" id="bSound">🔊</button>
-      <button class="btn" id="bSet">⚙️ AI</button>
     </div>
     <div id="count"></div>
     <div id="logo">ZZ Craft<small>an infinite crafting game</small></div>
@@ -376,57 +375,33 @@ for(const line of RAW.split("\n")){
   EMOJI[nm.toLowerCase()]=em; NAME[nm.toLowerCase()]=nm;
 }
 
-/* ---------- procedural fallback (deterministic) ---------- */
-const POOL=[["Energy","⚡"],["Dream","💭"],["Shadow","🌑"],["Machine","⚙️"],["Garden","🌷"],["Story","📖"],["Storm Cloud","⛈️"],["Treasure","💰"],["Mirror","🪞"],["Echo","📣"],["Crystal","🔮"],["Memory","🧠"],["Journey","🧭"],["Festival","🎉"],["Legend","📜"],["Harvest","🌾"],["Whisper","🤫"],["Spark","✨"],["Bridge","🌉"],["Lantern","🏮"],["Puzzle","🧩"],["Wonder","🌟"],["Mystery","🕵️"],["Engine","🛠️"],["Compass","🧭"],["Feather","🪶"],["Ocean Breeze","🌬️"],["Thunder","🌩️"],["Fossil","🦴"],["Cave","🕳️"],["Pyramid","🔺"],["Voyage","⛵"],["Harmony","🎶"],["Ruins","🏚️"],["Canyon","🏜️"],["Sunrise","🌅"],["Fog","🌫️"],["Magnet","🧲"],["Blueprint","📐"],["Kite","🪁"]];
-function fnv(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
-function proc(a,b){
-  const k=keyOf(a,b), h=fnv(k), A=a, B=b;
-  if(a.toLowerCase()===b.toLowerCase()){
-    const pre=["Giant","Double","Mega","Tiny","Super"][h%5];
-    return [pre+" "+A,EMOJI[A.toLowerCase()]||"❓"];
-  }
-  const mode=h%5;
-  const ea=EMOJI[A.toLowerCase()]||"❓", eb=EMOJI[B.toLowerCase()]||"❓";
-  const w=(x,y)=>x+" "+y;
-  if(mode===0){return [w(A,B),ea]}
-  if(mode===1){return [w(B,A),eb]}
-  if(mode===2){
-    const x=A.split(" ")[0], y=B.split(" ").slice(-1)[0];
-    const half=s=>s.slice(0,Math.ceil(s.length/2)), rest=s=>s.slice(Math.floor(s.length/2));
-    if(x.length>3&&y.length>3){let r=half(x)+rest(y).toLowerCase();r=r[0].toUpperCase()+r.slice(1);return [r,ea]}
-    return [w(A,B),eb];
-  }
-  const p=POOL[(h>>3)%POOL.length];return [p[0],p[1]];
-}
-
-/* ---------- optional AI (works when this file is opened outside a sandbox) ---------- */
-const settings=store.get("zz_settings",{provider:"none",key:""});
+/* ---------- shared AI brain (results are saved for every player) ---------- */
+// Same-origin on Netlify. If the page is hosted elsewhere, set this to your Netlify site URL.
+const API_BASE="";
 const cache=store.get("zz_cache",{});
-async function askAI(a,b){
-  if(settings.provider==="none"||!settings.key) return null;
-  const prompt=`You are the engine of the game Infinite Craft. Combine "${a}" and "${b}" into a single new concept (1-3 words, a real thing, word or well-known name). Reply ONLY with JSON: {"emoji":"<one emoji>","name":"<result>"}`;
+const inflight={};
+async function fetchOnce(a,b){
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),9000);
   try{
-    let txt;
-    if(settings.provider==="groq"){
-      const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.key},body:JSON.stringify({model:"llama-3.1-8b-instant",temperature:.4,messages:[{role:"user",content:prompt}]})});
-      const j=await r.json();txt=j.choices[0].message.content;
-    }else{
-      const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+encodeURIComponent(settings.key),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
-      const j=await r.json();txt=j.candidates[0].content.parts[0].text;
-    }
-    const m=txt.match(/\{[\s\S]*\}/);const o=JSON.parse(m[0]);
-    if(o&&o.name&&o.emoji) return [String(o.name).trim().slice(0,40),String(o.emoji).trim()];
-  }catch(e){}
-  return null;
+    const r=await fetch(API_BASE+"/api/combine?a="+encodeURIComponent(a)+"&b="+encodeURIComponent(b),{signal:ctrl.signal});
+    if(!r.ok) throw new Error("http "+r.status);
+    const j=await r.json();
+    if(!j||!j.name) throw new Error("bad");
+    return {name:j.name,emoji:j.emoji||"❓",first:!!j.first};
+  }finally{clearTimeout(t)}
 }
 async function combine(a,b){
   const k=keyOf(a,b);
-  if(RECIPES[k]) return RECIPES[k];
-  if(cache[k]) return cache[k];
-  let r=await askAI(a,b);
-  if(!r) r=proc(a,b);
-  cache[k]=r;store.set("zz_cache",cache);
-  return r;
+  if(RECIPES[k]) return {name:RECIPES[k][0],emoji:RECIPES[k][1],first:false};
+  if(cache[k]) return {...cache[k],first:false};
+  if(inflight[k]) return inflight[k];
+  inflight[k]=(async()=>{
+    let r;
+    try{r=await fetchOnce(a,b)}catch(e){r=await fetchOnce(a,b)}   // one quick retry
+    cache[k]={name:r.name,emoji:r.emoji};store.set("zz_cache",cache);
+    return r;
+  })();
+  try{return await inflight[k]}finally{delete inflight[k]}
 }
 
 /* ---------- state ---------- */
@@ -580,24 +555,25 @@ async function mergeItems(a,b){
   const spin=document.createElement("div");
   spin.className="item";spin.style.cssText=`position:absolute;left:${mx}px;top:${my}px;z-index:40`;
   spin.innerHTML=`<span class="spin"></span>`;stage.appendChild(spin);
-  const minWait=new Promise(r=>setTimeout(r,260));
-  const [res]=await Promise.all([combine(an,bn),minWait]);
+  let res=null;
+  try{res=await combine(an,bn)}catch(e){}
   spin.remove();
+  if(!res){
+    a.busy=b.busy=false;a.el.classList.remove("busy");b.el.classList.remove("busy");
+    toast("Couldn't combine those, try again");return;
+  }
   removeCanvasItem(a);removeCanvasItem(b);
-  const [name,emoji]=res;
+  const {name,emoji,first}=res;
   const c=addCanvasItem(name,emoji,mx,my,{pop:true});
   requestAnimationFrame(()=>{clampPos(c);c.el.style.left=c.x+"px";c.el.style.top=c.y+"px";saveCanvas()});
-  const lower=name.toLowerCase();
-  const had=discovered.find(d=>d.name.toLowerCase()===lower);
+  EMOJI[name.toLowerCase()]=emoji;
+  const had=discovered.find(d=>d.name.toLowerCase()===name.toLowerCase());
   if(!had){
-    // "first discovery" when the recipe wasn't in the known book (procedural / AI result)
-    const known=!!RECIPES[keyOf(an,bn)];
-    discovered.push({name,emoji,t:discovered.length+1000+Date.now()%100000,first:!known,isNew:true});
-    discovered.forEach((d,i)=>{if(d.name===name) d.t=nextT()});
+    discovered.push({name,emoji,t:nextT(),first,isNew:true});
     saveFound();renderList();
-    if(!known){toast("✨ First Discovery: "+emoji+" "+name);sndNew()}
+    if(first){toast("✨ First Discovery: "+emoji+" "+name);sndNew()}
     else{toast("New: "+emoji+" "+name);sndMerge()}
-    const last=list.lastElementChild;if(sortMode==="time"&&last) list.scrollTop=list.scrollHeight;
+    if(sortMode==="time") list.scrollTop=list.scrollHeight;
   }else{sndMerge()}
 }
 let tCounter=Math.max(...discovered.map(d=>d.t),0);
@@ -636,19 +612,6 @@ $("#bReset").onclick=()=>{
     tCounter=discovered.length;renderList();modal.classList.remove("show");toast("Progress reset");
   };
 };
-$("#bSet").onclick=()=>{
-  mbox.innerHTML=`<h3>Infinite mode (AI)</h3>
-  <p>ZZ Craft ships with a big built-in recipe book and a generator for everything else, so every combination always works. Add a free API key to let a real AI invent the results instead (like the original). This only works when the file is opened outside a sandbox (e.g. saved and run locally / hosted on your own site); keys stay in your browser.</p>
-  <label>Provider</label>
-  <select id="sProv"><option value="none">Built-in only</option><option value="groq">Groq (llama-3.1-8b-instant)</option><option value="gemini">Google Gemini (2.0 Flash)</option></select>
-  <label>API key</label><input id="sKey" type="password" placeholder="paste key" autocomplete="off">
-  <div class="row"><button class="btn" id="sCancel">Cancel</button><button class="btn pri" id="sSave">Save</button></div>`;
-  $("#sProv").value=settings.provider;$("#sKey").value=settings.key;
-  modal.classList.add("show");
-  $("#sCancel").onclick=()=>modal.classList.remove("show");
-  $("#sSave").onclick=()=>{settings.provider=$("#sProv").value;settings.key=$("#sKey").value.trim();store.set("zz_settings",settings);modal.classList.remove("show");toast(settings.provider==="none"?"Using built-in recipes":"AI mode on")};
-};
-
 /* ---------- init ---------- */
 // restore canvas
 const saved=store.get("zz_canvas",null);
@@ -662,7 +625,7 @@ if(!saved||!saved.length){
   // gentle hint
   toast("Drag items onto the canvas and combine them!");
 }
-window.__zz={combine,proc,RECIPES,keyOf};
+window.__zz={combine,RECIPES,keyOf};
 })();
 </script>
 </body>
