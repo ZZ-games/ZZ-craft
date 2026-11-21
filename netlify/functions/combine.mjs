@@ -1,13 +1,8 @@
 // ZZ Craft shared brain: every combination is generated once by AI, then saved for ALL players.
 import { getStore } from "@netlify/blobs";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
 const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...CORS } });
+  new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 
 const clean = (s) => String(s || "").replace(/[\u0000-\u001f<>{}\[\]"`\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
 const norm = (s) => clean(s).toLowerCase();
@@ -26,9 +21,9 @@ Rules:
 Reply with ONLY JSON: {"emoji":"<single emoji>","name":"<result>"}`;
 
 async function askGroq(a, b) {
-  const key = process.env.GROQ_API_KEY;
+  const key = Netlify.env.get("GROQ_API_KEY");
   if (!key) throw new Error("GROQ_API_KEY not set");
-  const models = [process.env.GROQ_MODEL || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  const models = [Netlify.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
   let lastErr;
   for (const model of models) {
     try {
@@ -63,26 +58,7 @@ async function askGroq(a, b) {
   throw lastErr;
 }
 
-// Best-effort abuse guard: only uncached (AI) lookups count. Cached recipes are free.
-const PER_IP_PER_MIN = Number(process.env.RATE_PER_MIN || 20);
-const GLOBAL_PER_DAY = Number(process.env.RATE_PER_DAY || 5000);
-async function overLimit(req) {
-  try {
-    const store = getStore("zz-rate");
-    const ip = (req.headers.get("x-nf-client-connection-ip") || req.headers.get("x-forwarded-for") || "anon").split(",")[0].trim().replace(/[^a-zA-Z0-9.:]/g, "_");
-    const now = Date.now();
-    const kMin = `ip_${ip}_${Math.floor(now / 60000)}`;
-    const kDay = `day_${Math.floor(now / 86400000)}`;
-    const [m, d] = await Promise.all([store.get(kMin, { type: "json" }), store.get(kDay, { type: "json" })]);
-    const mc = (m && m.n) || 0, dc = (d && d.n) || 0;
-    if (mc >= PER_IP_PER_MIN || dc >= GLOBAL_PER_DAY) return true;
-    await Promise.all([store.setJSON(kMin, { n: mc + 1 }), store.setJSON(kDay, { n: dc + 1 })]);
-  } catch {}
-  return false;
-}
-
 export default async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
   let a = url.searchParams.get("a"), b = url.searchParams.get("b");
   if (req.method === "POST") { try { const j = await req.json(); a = j.a; b = j.b; } catch {} }
@@ -98,23 +74,27 @@ export default async (req) => {
     if (hit) return json({ ...hit, first: false });
   } catch {}
 
-  if (await overLimit(req)) return json({ error: "slow_down" }, 429);
-
   let res;
   try { res = await askGroq(a, b); }
   catch (e) { return json({ error: "ai_failed" }, 502); }
 
-  // save for everyone (don't overwrite if another player raced us)
+  // save for everyone; onlyIfNew means the first writer wins if two players race
   let first = false;
   try {
-    const existing = await recipes.get(key, { type: "json" });
-    if (existing) return json({ ...existing, first: false });
-    await recipes.setJSON(key, res);
-    const ik = itemKey(res.name);
-    const seen = await items.get(ik, { type: "json" });
-    if (!seen) { first = true; await items.setJSON(ik, { name: res.name, emoji: res.emoji, t: Date.now() }); }
+    const { modified } = await recipes.setJSON(key, res, { onlyIfNew: true });
+    if (!modified) {
+      const existing = await recipes.get(key, { type: "json" });
+      if (existing) return json({ ...existing, first: false });
+    } else {
+      const made = await items.setJSON(itemKey(res.name), { name: res.name, emoji: res.emoji, t: Date.now() }, { onlyIfNew: true });
+      first = !!made.modified;
+    }
   } catch {}
   return json({ ...res, first });
 };
 
-export const config = { path: "/api/combine" };
+export const config = {
+  path: "/api/combine",
+  method: ["GET", "POST"],
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 60 },
+};
