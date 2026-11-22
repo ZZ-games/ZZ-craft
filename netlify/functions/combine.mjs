@@ -98,7 +98,11 @@ export default async (req) => {
 
   let res;
   try { res = await askGroq(a, b); }
-  catch (e) { return json({ error: "ai_failed" }, 502); }
+  catch (e) {
+    console.error("combine failed:", a, "+", b, "->", e && e.message);
+    const names = Object.keys(Netlify.env.toObject());
+    return json({ error: "ai_failed", why: String(e && e.message), keyFound: !!findKey(), gskVarSeen: names.some((n) => n.startsWith("gsk_")), groqVarSeen: names.includes("GROQ_API_KEY") }, 502);
+  }
 
   // save for everyone; onlyIfNew means the first writer wins if two players race
   let first = false;
