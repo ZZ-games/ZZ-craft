@@ -41,10 +41,32 @@ function looksBad(name, a, b) {
   return false;
 }
 
+const PREFERRED = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "llama-3.1-8b-instant", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "meta-models/muse-spark-open"];
+let modelCache = null; // survives while the function instance is warm
+async function pickModels(key) {
+  const override = Netlify.env.get("GROQ_MODEL");
+  if (modelCache && Date.now() - modelCache.t < 600000) return modelCache.list;
+  let list = PREFERRED;
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: "Bearer " + key } });
+    if (r.ok) {
+      const ids = ((await r.json()).data || []).map((m) => m.id);
+      const usable = PREFERRED.filter((m) => ids.includes(m));
+      // anything else chat-like the key can use, as a last resort
+      const extra = ids.filter((id) => !PREFERRED.includes(id) && !/whisper|tts|orpheus|guard|embed|playai/i.test(id));
+      list = [...usable, ...extra];
+      console.log("groq models available:", ids.join(", "));
+    } else console.error("groq models list failed", r.status);
+  } catch (e) { console.error("groq models list error", e && e.message); }
+  if (override) list = [override, ...list.filter((m) => m !== override)];
+  modelCache = { t: Date.now(), list };
+  return list;
+}
+
 async function askGroq(a, b) {
   const key = findKey();
   if (!key) throw new Error("no Groq key found");
-  const models = [Netlify.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  const models = (await pickModels(key)).slice(0, 3);
   let lastErr;
   for (const model of models) {
     try {
@@ -57,7 +79,8 @@ async function askGroq(a, b) {
         body: JSON.stringify({
           model,
           temperature: 0.3,
-          max_tokens: 60,
+          max_tokens: /gpt-oss|qwen|minimax/i.test(model) ? 600 : 60,
+          ...(/gpt-oss/i.test(model) ? { reasoning_effort: "low" } : {}),
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: SYSTEM },
