@@ -20,9 +20,21 @@ Rules:
 - Pick a fitting emoji.
 Reply with ONLY JSON: {"emoji":"<single emoji>","name":"<result>"}`;
 
+// Prefer GROQ_API_KEY. Otherwise accept a variable whose NAME is the key itself (starts with gsk_),
+// using its value, or the name if the value isn't a key.
+function findKey() {
+  const direct = Netlify.env.get("GROQ_API_KEY");
+  if (direct) return direct;
+  const all = Netlify.env.toObject();
+  for (const [name, value] of Object.entries(all)) {
+    if (name.startsWith("gsk_")) return String(value || "").startsWith("gsk_") ? value : name;
+  }
+  return null;
+}
+
 async function askGroq(a, b) {
-  const key = Netlify.env.get("GROQ_API_KEY");
-  if (!key) throw new Error("GROQ_API_KEY not set");
+  const key = findKey();
+  if (!key) throw new Error("no Groq key found");
   const models = [Netlify.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
   let lastErr;
   for (const model of models) {
