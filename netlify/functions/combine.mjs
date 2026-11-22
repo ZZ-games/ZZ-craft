@@ -66,7 +66,7 @@ async function askGroq(a, b) {
         }),
       });
       clearTimeout(t);
-      if (!r.ok) throw new Error("groq " + r.status);
+      if (!r.ok) { const body = (await r.text().catch(() => "")).slice(0, 300); throw new Error("groq " + r.status + " [" + model + "] " + body); }
       const j = await r.json();
       const o = JSON.parse(j.choices[0].message.content);
       const name = clean(o.name);
