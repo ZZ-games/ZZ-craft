@@ -381,6 +381,9 @@ const API_BASE="";
 if(store.get("zz_v",0)<2){store.del("zz_cache");store.set("zz_v",2)}   // drop results from the old junk generator
 const cache=store.get("zz_cache",{});
 const inflight={};
+// ~20,000 pre-made combos (made by Claude Haiku). Instant and free; anything not in here goes to the shared AI.
+let BIG={};
+const bigReady=fetch("recipes.json").then(r=>r.json()).then(j=>{BIG=j}).catch(()=>{});
 async function fetchOnce(a,b){
   const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),9000);
   try{
@@ -394,6 +397,8 @@ async function fetchOnce(a,b){
 async function combine(a,b){
   const k=keyOf(a,b);
   if(RECIPES[k]) return {name:RECIPES[k][0],emoji:RECIPES[k][1],first:false};
+  await bigReady;
+  if(BIG[k]) return {name:BIG[k][0],emoji:BIG[k][1],first:false};
   if(cache[k]) return {...cache[k],first:false};
   if(inflight[k]) return inflight[k];
   inflight[k]=(async()=>{
