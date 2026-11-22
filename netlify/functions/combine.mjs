@@ -32,6 +32,15 @@ function findKey() {
   return null;
 }
 
+function looksBad(name, a, b) {
+  const n = name.toLowerCase(), x = a.toLowerCase(), y = b.toLowerCase();
+  if (n === x || n === y) return true;                         // just echoes an input
+  if (n.includes(x) && n.includes(y)) return true;             // glues both inputs together
+  if (name.split(" ").length > 3) return true;                 // run-on names
+  if (/^(super|giant|mega|tiny|double)\b/.test(n) && !/^(super|giant|mega|tiny|double)\b/.test(x + y) === false) return true;
+  return false;
+}
+
 async function askGroq(a, b) {
   const key = findKey();
   if (!key) throw new Error("no Groq key found");
@@ -64,6 +73,7 @@ async function askGroq(a, b) {
       const emoji = String(o.emoji || "").trim().slice(0, 8) || "❓";
       if (!name || name.length < 2) throw new Error("bad name");
       if (name.toLowerCase() === "nothing") throw new Error("nothing");
+      if (looksBad(name, a, b)) throw new Error("bad result");
       return { name, emoji };
     } catch (e) { lastErr = e; }
   }

@@ -378,6 +378,7 @@ for(const line of RAW.split("\n")){
 /* ---------- shared AI brain (results are saved for every player) ---------- */
 // Same-origin on Netlify. If the page is hosted elsewhere, set this to your Netlify site URL.
 const API_BASE="";
+if(store.get("zz_v",0)<2){store.del("zz_cache");store.set("zz_v",2)}   // drop results from the old junk generator
 const cache=store.get("zz_cache",{});
 const inflight={};
 async function fetchOnce(a,b){
